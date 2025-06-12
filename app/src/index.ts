@@ -158,13 +158,14 @@ app.get('/share/:id/api', async (req, res) => {
       return res.status(404).json({ error: 'Invalid or expired share key' })
     }
 
-    const media = share.link.assets.map(asset => {
-      return {
-        id: asset.id,
-        thumbUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}/thumbnail`,
-        originalUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}`
-      }
-    })
+const base = 'https://i.techie.pics'
+const media = share.link.assets.map(asset => {
+  return {
+    id: asset.id,
+    thumbUrl: `${base}/share/photo/${shareKey}/${asset.id}/thumbnail`,
+    originalUrl: `${base}/share/photo/${shareKey}/${asset.id}/original`
+  }
+})
 
     res.json({ media })
   } catch (err: any) {
