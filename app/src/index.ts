@@ -168,6 +168,11 @@ if (getConfigOption('ipp.showHomePage', true)) {
  * [ROUTE] Public JSON API for lightGallery and embeds
  */
 app.get('/share/:id/api', async (req, res) => {
+  // 🔐 Add CORS headers directly
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
   try {
     const media = await getGalleryAssetsByShareKey(req.params.id)
     res.json({ media })
