@@ -11,6 +11,7 @@ import { AssetType, ImageSize } from './types'
 import { log, toString, addResponseHeaders, getConfigOption } from './functions'
 import { decrypt, encrypt } from './encrypt'
 import { respondToInvalidRequest } from './invalidRequestHandler'
+import { getGalleryAssetsByShareKey } from './immich'
 
 // Extend the Request type with a `password` property
 declare module 'express-serve-static-core' {
@@ -155,7 +156,18 @@ if (getConfigOption('ipp.showHomePage', true)) {
     res.render('home')
   })
 }
-
+/*
+ * [ROUTE] Public JSON API for lightGallery and embeds
+ */
+app.get('/share/:id/api', async (req, res) => {
+  try {
+    const media = await getGalleryAssetsByShareKey(req.params.id)
+    res.json({ media })
+  } catch (err: any) {
+    log('Failed to serve JSON gallery for key ' + req.params.id)
+    res.status(404).json({ error: 'Invalid or expired share key' })
+  }
+})
 /*
  * Send a 404 for all other routes
  */
