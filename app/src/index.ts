@@ -113,16 +113,25 @@ app.get('/share/:type(photo|video)/:key/:id/:size?', decodeCookie, async (req, r
     key: req.params.key,
     range: req.headers.range || ''
   }
-  if (sharedLink?.assets.length) {
-    const asset = sharedLink.assets.find(x => x.id === req.params.id)
-    if (asset) {
-      asset.type = req.params.type === 'video' ? AssetType.video : AssetType.image
-      render.assetBuffer(request, res, asset, req.params.size).then()
-    }
+if (sharedLink?.assets?.length) {
+  console.log(`[DEBUG] Available asset IDs in share ${req.params.key}:`)
+  console.log(sharedLink.assets.map(a => a.id))
+
+  const asset = sharedLink.assets.find(x => x.id === req.params.id)
+
+  if (asset) {
+    asset.type = req.params.type === 'video' ? AssetType.video : AssetType.image
+    console.log(`[DEBUG] Found asset ${asset.id}, serving with type ${asset.type}`)
+    render.assetBuffer(request, res, asset, req.params.size).then()
   } else {
-    log('No asset found for ' + req.path)
+    console.warn(`[WARN] Asset ID ${req.params.id} not found in shared assets.`)
     respondToInvalidRequest(res, 404)
   }
+} else {
+  console.warn(`[WARN] No assets found in share ${req.params.key} — possibly locked or missing?`)
+  respondToInvalidRequest(res, 404)
+}
+
 })
 
 if (getConfigOption('ipp.showHomePage', true)) {
