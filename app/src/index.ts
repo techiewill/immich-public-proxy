@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import cors from 'cors'
 import express from 'express'
 import cookieSession from 'cookie-session'
 import immich from './immich'
@@ -27,6 +28,7 @@ const app = express()
 app.use(cors({
   origin: '*', // or use 'https://techie.pics' to restrict
   methods: ['GET']
+  allowedHeaders: ['Content-Type']
 }))
 
 app.use(cookieSession({
