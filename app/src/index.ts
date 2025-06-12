@@ -163,6 +163,7 @@ const media = share.link.assets.map(asset => {
   return {
     id: asset.id,
     thumbUrl: `${base}/share/photo/${shareKey}/${asset.id}/thumbnail`,
+    previewUrl: `${base}/share/photo/${shareKey}/${asset.id}/preview`,
     originalUrl: `${base}/share/photo/${shareKey}/${asset.id}/original`
   }
 })
