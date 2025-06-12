@@ -23,6 +23,12 @@ declare module 'express-serve-static-core' {
 require('dotenv').config()
 
 const app = express()
+// 👇 NEW CORS middleware
+app.use(cors({
+  origin: '*', // or use 'https://techie.pics' to restrict
+  methods: ['GET']
+}))
+
 app.use(cookieSession({
   name: 'session',
   httpOnly: true,
