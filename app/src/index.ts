@@ -24,16 +24,17 @@ declare module 'express-serve-static-core' {
 
 const app = express()
 
-// ✅ Global CORS middleware to handle both actual and preflight requests
+// ✅ Global CORS middleware that always sets headers
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200)
+    return res.sendStatus(204)
   }
   next()
 })
+
 
 app.use(cookieSession({
   name: 'session',
@@ -138,6 +139,7 @@ app.options('/share/:id/api', (req, res) => {
   res.sendStatus(200)
 })
 app.get('/share/:id/api', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
   try {
     const media = await getGalleryAssetsByShareKey(req.params.id)
     res.json({ media })
