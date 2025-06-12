@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import cors from 'cors'
 import express from 'express'
 import cookieSession from 'cookie-session'
 import immich from './immich'
@@ -14,6 +13,8 @@ import { decrypt, encrypt } from './encrypt'
 import { respondToInvalidRequest } from './invalidRequestHandler'
 import { getGalleryAssetsByShareKey } from './immich'
 
+require('dotenv').config()
+
 // Extend the Request type with a `password` property
 declare module 'express-serve-static-core' {
   interface Request {
@@ -21,15 +22,18 @@ declare module 'express-serve-static-core' {
   }
 }
 
-require('dotenv').config()
-
 const app = express()
-// 👇 NEW CORS middleware
-app.use(cors({
-  origin: '*', // or use 'https://techie.pics' to restrict
-  methods: ['GET']
-  allowedHeaders: ['Content-Type']
-}))
+
+// ✅ Global CORS middleware to handle both actual and preflight requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200)
+  }
+  next()
+})
 
 app.use(cookieSession({
   name: 'session',
@@ -37,20 +41,12 @@ app.use(cookieSession({
   sameSite: 'strict',
   secret: crypto.randomBytes(32).toString('base64url')
 }))
-// Add the EJS view engine, to render the gallery page
 app.set('view engine', 'ejs')
-// For parsing the password unlock form
 app.use(express.json())
-// Serve static assets from the 'public' folder as /share/static
 app.use('/share/static', express.static('public', { setHeaders: addResponseHeaders }))
-// Serve the same assets on /, to allow for /robots.txt and /favicon.ico
 app.use(express.static('public', { setHeaders: addResponseHeaders }))
-// Remove the X-Powered-By ExpressJS header
 app.disable('x-powered-by')
 
-/**
- * Middleware to decode the encrypted data stored in the session cookie
- */
 const decodeCookie = (req: Request, _res: Response, next: NextFunction) => {
   const shareKey = req.params.key
   const session = req.session?.[shareKey]
@@ -63,15 +59,11 @@ const decodeCookie = (req: Request, _res: Response, next: NextFunction) => {
       if (payload?.expires && dayjs(payload.expires) > dayjs()) {
         req.password = payload.password
       }
-    } catch (e) { }
+    } catch (e) {}
   }
   next()
 }
 
-/*
- * [ROUTE] Healthcheck
- * The path matches for /share/healthcheck, and also the legacy /healthcheck
- */
 app.get(/^(|\/share)\/healthcheck$/, async (_req, res) => {
   if (await immich.accessible()) {
     res.send('ok')
@@ -80,9 +72,6 @@ app.get(/^(|\/share)\/healthcheck$/, async (_req, res) => {
   }
 })
 
-/*
- * [ROUTE] This is the main URL that someone would visit if they are opening a shared link
- */
 app.get('/share/:key/:mode(download)?', decodeCookie, async (req, res) => {
   await immich.handleShareRequest({
     req,
@@ -92,11 +81,6 @@ app.get('/share/:key/:mode(download)?', decodeCookie, async (req, res) => {
   }, res)
 })
 
-/*
- * [ROUTE] Receive an unlock request from the password page
- * Stores a cookie with an encrypted payload which expires in 1 hour.
- * After that time, the visitor will need to provide the password again.
- */
 app.post('/share/unlock', async (req, res) => {
   if (req.session && req.body.key) {
     req.session[req.body.key] = encrypt(JSON.stringify({
@@ -107,29 +91,21 @@ app.post('/share/unlock', async (req, res) => {
   res.send()
 })
 
-/*
- * [ROUTE] This is the direct link to a photo or video asset
- */
 app.get('/share/:type(photo|video)/:key/:id/:size?', decodeCookie, async (req, res) => {
-  // Add the headers configured in config.json (most likely `cache-control`)
   addResponseHeaders(res)
 
-  // Check for valid key and ID
   if (!immich.isKey(req.params.key) || !immich.isId(req.params.id)) {
     log('Invalid key or ID for ' + req.path)
     respondToInvalidRequest(res, 404)
     return
   }
 
-  // Validate the size parameter
   if (req.params.size && !Object.values(ImageSize).includes(req.params.size as ImageSize)) {
     log('Invalid size parameter ' + req.path)
     respondToInvalidRequest(res, 404)
     return
   }
 
-  // Fetch the shared link information from Immich, so we can check to make sure that the requested asset
-  // is allowed by this shared link.
   const sharedLink = (await immich.getShareByKey(req.params.key, req.password))?.link
   const request = {
     req,
@@ -137,7 +113,6 @@ app.get('/share/:type(photo|video)/:key/:id/:size?', decodeCookie, async (req, r
     range: req.headers.range || ''
   }
   if (sharedLink?.assets.length) {
-    // Check that the requested asset exists in this share
     const asset = sharedLink.assets.find(x => x.id === req.params.id)
     if (asset) {
       asset.type = req.params.type === 'video' ? AssetType.video : AssetType.image
@@ -149,30 +124,14 @@ app.get('/share/:type(photo|video)/:key/:id/:size?', decodeCookie, async (req, r
   }
 })
 
-/*
- * [ROUTE] Home page
- *
- * It was requested here to have *something* on the home page:
- * https://github.com/alangrainger/immich-public-proxy/discussions/19
- *
- * If you don't want to see this, set showHomePage as false in your config.json:
- * https://github.com/alangrainger/immich-public-proxy?tab=readme-ov-file#immich-public-proxy-options
- */
 if (getConfigOption('ipp.showHomePage', true)) {
   app.get(/^\/(|share)\/*$/, (_req, res) => {
     addResponseHeaders(res)
     res.render('home')
   })
 }
-/*
- * [ROUTE] Public JSON API for lightGallery and embeds
- */
-app.get('/share/:id/api', async (req, res) => {
-  // 🔐 Add CORS headers directly
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
+app.get('/share/:id/api', async (req, res) => {
   try {
     const media = await getGalleryAssetsByShareKey(req.params.id)
     res.json({ media })
@@ -181,16 +140,12 @@ app.get('/share/:id/api', async (req, res) => {
     res.status(404).json({ error: 'Invalid or expired share key' })
   }
 })
-/*
- * Send a 404 for all other routes
- */
+
 app.get('*', (req, res) => {
   log('Invalid route ' + req.path)
   respondToInvalidRequest(res, 404)
 })
 
-// Send the correct process error code for any uncaught exceptions
-// so that Docker can gracefully restart the container
 process.on('uncaughtException', (err) => {
   console.error('There was an uncaught error', err)
   server.close()
@@ -207,7 +162,6 @@ process.on('SIGTERM', () => {
   process.exit(0)
 })
 
-// Start the ExpressJS server
 const port = process.env.IPP_PORT || 3000
 const server = app.listen(port, () => {
   console.log(dayjs().format() + ' Server started on port ' + port)
