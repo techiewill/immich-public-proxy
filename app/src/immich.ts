@@ -298,6 +298,22 @@ class Immich {
     }
   }
 }
+export async function getGalleryAssetsByShareKey(key: string): Promise<{ id: string; name: string; webpPath: string; thumbPath: string }[]> {
+  const result = await immich.getShareByKey(key)
+
+  if (!result.valid || !result.link) {
+    throw new Error('Invalid or expired share key')
+  }
+
+  const assets = result.link.assets || []
+
+  return assets.map(asset => ({
+    id: asset.id,
+    name: asset.originalFileName,
+    webpPath: asset.webpPath,
+    thumbPath: asset.thumbPath
+  }))
+}
 
 const immich = new Immich()
 
