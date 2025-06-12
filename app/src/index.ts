@@ -149,8 +149,23 @@ app.options('/share/:id/api', (req, res) => {
 })
 app.get('/share/:id/api', async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
+
   try {
-    const media = await getGalleryAssetsByShareKey(req.params.id)
+    const shareKey = req.params.id
+    const share = await immich.getShareByKey(shareKey, '')//unlocks share
+
+    if (!share?.link || !share.link.assets.length) {
+      return res.status(404).json({ error: 'Invalid or expired share key' })
+    }
+
+    const media = share.link.assets.map(asset => {
+      return {
+        id: asset.id,
+        thumbUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}/thumb`,
+        originalUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}`
+      }
+    })
+
     res.json({ media })
   } catch (err: any) {
     log('Failed to serve JSON gallery for key ' + req.params.id)
