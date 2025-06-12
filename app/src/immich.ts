@@ -311,9 +311,9 @@ export async function getGalleryAssetsByShareKey(
 
   return assets.map(asset => ({
     id: asset.id,
-    name: asset.originalFileName || '', // fallback if undefined
-    webpPath: (asset as any).webpPath,  // bypass type check
-    thumbPath: (asset as any).thumbPath
+    name: asset.originalFileName || '',
+    webpPath: `/share/${key}/${asset.id}/webp`,
+    thumbPath: `/share/${key}/${asset.id}/thumbnail`
   }));
 }
 
