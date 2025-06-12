@@ -11,11 +11,9 @@ import { AssetType, ImageSize } from './types'
 import { log, toString, addResponseHeaders, getConfigOption } from './functions'
 import { decrypt, encrypt } from './encrypt'
 import { respondToInvalidRequest } from './invalidRequestHandler'
-import { getGalleryAssetsByShareKey } from './immich'
 
 require('dotenv').config()
 
-// Extend the Request type with a `password` property
 declare module 'express-serve-static-core' {
   interface Request {
     password?: string;
@@ -24,7 +22,6 @@ declare module 'express-serve-static-core' {
 
 const app = express()
 
-// ✅ Global CORS middleware that always sets headers
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -34,7 +31,6 @@ app.use((req, res, next) => {
   }
   next()
 })
-
 
 app.use(cookieSession({
   name: 'session',
@@ -113,25 +109,18 @@ app.get('/share/:type(photo|video)/:key/:id/:size?', decodeCookie, async (req, r
     key: req.params.key,
     range: req.headers.range || ''
   }
-if (sharedLink?.assets?.length) {
-  console.log(`[DEBUG] Available asset IDs in share ${req.params.key}:`)
-  console.log(sharedLink.assets.map(a => a.id))
 
-  const asset = sharedLink.assets.find(x => x.id === req.params.id)
-
-  if (asset) {
-    asset.type = req.params.type === 'video' ? AssetType.video : AssetType.image
-    console.log(`[DEBUG] Found asset ${asset.id}, serving with type ${asset.type}`)
-    render.assetBuffer(request, res, asset, req.params.size).then()
+  if (sharedLink?.assets?.length) {
+    const asset = sharedLink.assets.find(x => x.id === req.params.id)
+    if (asset) {
+      asset.type = req.params.type === 'video' ? AssetType.video : AssetType.image
+      render.assetBuffer(request, res, asset, req.params.size).then()
+    } else {
+      respondToInvalidRequest(res, 404)
+    }
   } else {
-    console.warn(`[WARN] Asset ID ${req.params.id} not found in shared assets.`)
     respondToInvalidRequest(res, 404)
   }
-} else {
-  console.warn(`[WARN] No assets found in share ${req.params.key} — possibly locked or missing?`)
-  respondToInvalidRequest(res, 404)
-}
-
 })
 
 if (getConfigOption('ipp.showHomePage', true)) {
@@ -140,35 +129,41 @@ if (getConfigOption('ipp.showHomePage', true)) {
     res.render('home')
   })
 }
-// 🔁 CORS preflight support for /share/:id/api
+
 app.options('/share/:id/api', (req, res) => {
   res.header('Access-Control-Allow-Origin', '*')
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
   res.sendStatus(200)
 })
+
 app.get('/share/:id/api', async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
   try {
     const shareKey = req.params.id
-    const share = await immich.getShareByKey(shareKey, '')//unlocks share
+    const share = await immich.getShareByKey(shareKey, '')
 
     if (!share?.link || !share.link.assets.length) {
       return res.status(404).json({ error: 'Invalid or expired share key' })
     }
 
-const base = 'https://i.techie.pics'
-const media = share.link.assets.map(asset => {
-  return {
-    id: asset.id,
-    thumbUrl: `${base}/share/photo/${shareKey}/${asset.id}/thumbnail`,
-    previewUrl: `${base}/share/photo/${shareKey}/${asset.id}/preview`,
-    originalUrl: `${base}/share/photo/${shareKey}/${asset.id}/original`
-  }
-})
+    const base = 'https://i.techie.pics'
+    const page = parseInt(req.query.page as string) || 1
+    const pageSize = parseInt(req.query.pageSize as string) || 20
+    const start = (page - 1) * pageSize
+    const pagedAssets = share.link.assets.slice(start, start + pageSize)
 
-    res.json({ media })
+    const media = pagedAssets.map(asset => {
+      return {
+        id: asset.id,
+        thumbUrl: `${base}/share/photo/${shareKey}/${asset.id}/thumbnail`,
+        previewUrl: `${base}/share/photo/${shareKey}/${asset.id}/preview`,
+        originalUrl: `${base}/share/photo/${shareKey}/${asset.id}/original`
+      }
+    })
+
+    res.json({ media, page, pageSize, total: share.link.assets.length })
   } catch (err: any) {
     log('Failed to serve JSON gallery for key ' + req.params.id)
     res.status(404).json({ error: 'Invalid or expired share key' })
