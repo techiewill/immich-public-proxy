@@ -130,7 +130,13 @@ if (getConfigOption('ipp.showHomePage', true)) {
     res.render('home')
   })
 }
-
+// 🔁 CORS preflight support for /share/:id/api
+app.options('/share/:id/api', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+  res.sendStatus(200)
+})
 app.get('/share/:id/api', async (req, res) => {
   try {
     const media = await getGalleryAssetsByShareKey(req.params.id)
