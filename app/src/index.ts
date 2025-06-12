@@ -161,7 +161,7 @@ app.get('/share/:id/api', async (req, res) => {
     const media = share.link.assets.map(asset => {
       return {
         id: asset.id,
-        thumbUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}/thumb`,
+        thumbUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}/thumbnail`,
         originalUrl: `${req.protocol}://${req.get('host')}/share/photo/${shareKey}/${asset.id}`
       }
     })
